@@ -20,9 +20,10 @@ int wallStorageAngle = 60;
 int wallReachAngle = 0;
 int wallPin = 8;
 
+
 int TRIGGER_PIN = 10; // Arduino pin tied to trigger pin on the ultrasonic sensor (HCSR04).
 int ECHO_PIN = 9;      // Arduino pin tied to echo pin on the ultrasonic sensor.
-int MAX_DISTANCE = 20;  // Max distance in centimeters that the ultrasonic sensor will look for
+int MAX_DISTANCE = 10;  // Max distance in centimeters that the ultrasonic sensor will look for
 
 int distance = 0;
 bool detectingHand = false;
@@ -30,10 +31,15 @@ bool detectingHand = false;
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 // max dist can be increased but further distances can take longer to read which could disrupt balancing
 
+int motorPin = 7;
 
 int ON = LOW;
 int OFF = HIGH; 
 int prevState = ON;
+bool flipped = false;
+bool detectedBeforeFlip = false;
+int detectedCounter = 0;
+bool handDetected = false;
 
 void setup() {
   arm.attach(armPin);  
@@ -48,28 +54,52 @@ void setup() {
   pinMode(TRIGGER_PIN, INPUT); 
   pinMode(ECHO_PIN, INPUT);
   
-
+  pinMode(motorPin, OUTPUT);
   Serial.begin(9600);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
   switchState = digitalRead(switchPin);
-  distanceSensing();
+  detectingHand = distanceSensing();
 
+
+
+  if (detectingHand == true && flipped == false) {
+    handDetected = true;
+    logger("detected");
+    detectedCounter = 0;
+  } 
+
+  if (detectingHand == false && detectedCounter > 75 && handDetected == true) {
+    handDetected = false;
+    logger("no longer detected");
+    detectedCounter = 0;
+  } else {
+    detectedCounter++;
+  }
+
+  
+  
   if (switchState == OFF){ //switch in the prefered position
+    flipped = false;
     moveWall();
     if (prevState == ON) {
       prevState = OFF;
       arm.write(storageAngle);
+      
     }
     
   } else { // switch not in the perfered position
-   
+    flipped = true;
     if (prevState == OFF) {
       reachAction(flickNum);
       flickNum++;
       prevState = ON;
+      if (handDetected == false){
+        
+        move();
+      } 
       // Serial.print("flicked: ");
       // Serial.println(flickNum);
     }
@@ -77,9 +107,28 @@ void loop() {
 
     
   }
-  
   delay(15);
 }
+
+
+int moveCounter = 0;
+void move() {
+  
+  while (moveCounter < 30) {
+    digitalWrite(motorPin, HIGH);
+    logger("moving");
+    moveCounter++;
+  } 
+
+  logger("stopping");
+  digitalWrite(motorPin, LOW);
+  
+  moveCounter = 0;
+
+}
+  
+  
+  
 
 void reachAction(int attempt){
   if(attempt == 0) {
@@ -97,7 +146,6 @@ void moveWall(){
   counter++;
   if (detectingHand && distance < 15 && switchState == OFF) {
     if (wallHidden == true){
-      logger("wall extending");
       wall.write(wallReachAngle);
       wallHidden = false;
       counter = 0;
@@ -110,14 +158,14 @@ void moveWall(){
   }
 }
 
-void distanceSensing(){
+bool distanceSensing(){
   distance = sonar.ping_cm();
   if (distance != 0 && distance < MAX_DISTANCE) {
-    detectingHand = true;
+    return true;
     // Serial.println("hand detecting");
     
   } else {
-    detectingHand = false;
+    return false;
     
   }
 
