@@ -2,6 +2,8 @@
 #pragma region Distance Sensor config
 #include <NewPing.h>
 
+#define TRUE 1
+#define FALSE 0
 
 
 Servo arm;
@@ -31,7 +33,14 @@ bool detectingHand = false;
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 // max dist can be increased but further distances can take longer to read which could disrupt balancing
 
-int motorPin = 7;
+int motorControlPin1 = 6;
+int motorControlPin2 = 5;
+int enablePin = 3;
+int motorEnable = 0;
+int motorSpeed= 0;
+int motorDirection = 1;
+bool startEvading = false;
+bool activateMove = false;
 
 int ON = LOW;
 int OFF = HIGH; 
@@ -55,9 +64,12 @@ void setup() {
   pinMode(TRIGGER_PIN, INPUT); 
   pinMode(ECHO_PIN, INPUT);
   
-  pinMode(motorPin, OUTPUT);
+  pinMode(motorControlPin1, OUTPUT);
+  pinMode(motorControlPin2, OUTPUT);
+  pinMode(enablePin, OUTPUT);
+  
   Serial.begin(9600);
-
+  digitalWrite(enablePin, LOW);
   arm.write(storageAngle);
   wall.write(wallStorageAngle);
 }
@@ -83,6 +95,11 @@ void loop() {
     detectedCounter++;
   }
 
+  if (handDetected == false && flipped == true) {
+    startEvading = true;
+    logger("true");
+  }
+
   // if (checkSwitch() == true) { //switch was flipped
   //   // logger("flip");
   //   flip(flickNum);
@@ -103,9 +120,6 @@ void loop() {
     flipped = true;
     if (prevState == OFF) {
       prevState = ON;
-      // if (handDetected == false){
-      //   move();
-      // } 
       flip(flickNum);
       return true;
     }
@@ -114,6 +128,11 @@ void loop() {
   if (activateWall == true) {
     moveWall();
   }
+
+  if (activateMove == true) {
+    move();
+  }
+  // move();
   
   
   delay(15);
@@ -126,12 +145,14 @@ void flip(int attempt){
     delay(1000);
     arm.write(reachAngle);
   } else if(attempt > 0 && attempt < 6) {
-      reachArm(false); // [][][][][][][][][][][][][][][][]change to true for final
+    reachArm(true); // [][][][][][][][][][][][][][][][]change to true for final
   } else if(attempt > 5 && attempt < 16){
-      reachArm(false);
-      activateWall = true;
-    
+    reachArm(false);
+    activateWall = true;
   } else {
+    reachArm(false);
+    activateWall = true;
+    activateMove = true;
     //arm.write(reachAngle);
   }
 }
@@ -164,6 +185,7 @@ void reachArm(bool includePeek){
       } else {
         arm.write(reachAngle);
       }
+      break;
   }
 }
 
@@ -180,9 +202,6 @@ bool checkSwitch() {
     flipped = true;
     if (prevState == OFF) {
       prevState = ON;
-      // if (handDetected == false){
-      //   move();
-      // } 
       flip(flickNum);
       logger("true");
       return true;
@@ -190,25 +209,58 @@ bool checkSwitch() {
   }
 }
 
-int moveCounter = 0;
+int evasiveCounter = 0;
+int moveCounter = random(5, 10);
+int waitCounter = 0;
+int moveType = random(1, 4);
 void move() {
-  while (moveCounter < 30) {
-    digitalWrite(motorPin, HIGH);
-    logger("moving");
-    moveCounter++;
-  } 
-  logger("stopping");
-  digitalWrite(motorPin, LOW);
-  
-  moveCounter = 0;
+  if (startEvading == true) { // evasive maneuvers for 10ish seconds
+    if (evasiveCounter < 1000) {
+      String s = "evading |";
+      logger(s + evasiveCounter + "|" + waitCounter + "|" + moveCounter + "|" + startEvading + "|" + motorDirection);
+      evasiveCounter++;
+      if (waitCounter == 0) {
+        
+        if (moveCounter > 0) {
+          moveCounter--;
+          analogWrite(enablePin, 1000);
+        } else {
+          moveCounter = random(5, 10);
+          waitCounter = random(15, 50);
+          analogWrite(enablePin, 0);
+          changeMotorDir();
+          
+        }
+      } else {
+        
+        waitCounter--;
+        
+      } 
+      
+    } else {
+      startEvading = false;
+      evasiveCounter = 0;
+    }
+  }
+}
 
+
+void changeMotorDir() {
+  
+  motorDirection = !motorDirection;
+  if (motorDirection == 1) {
+    digitalWrite(motorControlPin1, HIGH);
+    digitalWrite(motorControlPin2, LOW);
+  } else {
+    digitalWrite(motorControlPin1, LOW);
+    digitalWrite(motorControlPin2, HIGH);
+  }
 }
    
 int counter = 0;
 int wallWouldBeDisplayedCounter = 0;
 int holdWallDisplayCounter = random(1, 4);
 void moveWall(){
-  
   counter++;
   if (detectingHand && distance < 15 && switchState == OFF) {
     if (wallWouldbeDisplayed == false){
