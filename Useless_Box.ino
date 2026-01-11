@@ -50,6 +50,11 @@ bool detectedBeforeFlip = false;
 int detectedCounter = 0;
 bool handDetected = false;
 bool activateWall = false;
+bool dodging = false;
+
+unsigned long flipStartTime = 0;   
+int currentRandomDelay = 0;        
+bool waitingToFlip = false;
 
 void setup() {
   arm.attach(armPin);  
@@ -72,6 +77,10 @@ void setup() {
   digitalWrite(enablePin, LOW);
   arm.write(storageAngle);
   wall.write(wallStorageAngle);
+  switchState = digitalRead(switchPin);
+  if (switchState == ON) {
+    reachArm(false);
+  }
 }
 
 void loop() {
@@ -87,9 +96,9 @@ void loop() {
     detectedCounter = 0;
   } 
 
-  if (detectingHand == false && detectedCounter > 75 && handDetected == true) {
+  if (detectingHand == false && detectedCounter > 150 && handDetected == true) {
     handDetected = false;
-    // logger("no longer detected");
+    logger("no longer detected");
     detectedCounter = 0;
   } else {
     detectedCounter++;
@@ -120,8 +129,23 @@ void loop() {
     flipped = true;
     if (prevState == OFF) {
       prevState = ON;
-      flip(flickNum);
+      if (random(1, 101) <= 30) {
+        // SCENARIO A: Random Delay
+        flipStartTime = millis();
+        currentRandomDelay = random(750, 1500); // 0.5 to 2.5 seconds
+        waitingToFlip = true;
+        logger("Delay triggered!");
+      } else {
+        // SCENARIO B: Instant Reaction
+        flip(flickNum);
+        waitingToFlip = false;
+        logger("Instant flip!");
+      }
       return true;
+    }
+    if (waitingToFlip && (millis() - flipStartTime >= currentRandomDelay)) {
+      flip(flickNum);
+      waitingToFlip = false; 
     }
   }
 
@@ -133,7 +157,7 @@ void loop() {
     move();
   }
   // move();
-  
+  dodge();
   
   delay(15);
 }
@@ -145,14 +169,17 @@ void flip(int attempt){
     delay(1000);
     arm.write(reachAngle);
   } else if(attempt > 0 && attempt < 6) {
+    activateMove = true;
     reachArm(true); // [][][][][][][][][][][][][][][][]change to true for final
   } else if(attempt > 5 && attempt < 16){
+    activateMove = true;
     reachArm(false);
     activateWall = true;
   } else {
     reachArm(false);
     activateWall = true;
     activateMove = true;
+    
     //arm.write(reachAngle);
   }
 }
@@ -189,26 +216,6 @@ void reachArm(bool includePeek){
   }
 }
 
-bool checkSwitch() {
-  if (switchState == OFF){ //switch in the prefered position
-    flipped = false;
-    if (prevState == ON) {
-      prevState = OFF;
-      storeArm(1);
-      return false;
-    }
-    
-  } else if (switchState == ON){ // switch not in the perfered position
-    flipped = true;
-    if (prevState == OFF) {
-      prevState = ON;
-      flip(flickNum);
-      logger("true");
-      return true;
-    }
-  }
-}
-
 int evasiveCounter = 0;
 int moveCounter = random(5, 10);
 int waitCounter = 0;
@@ -232,9 +239,7 @@ void move() {
           
         }
       } else {
-        
         waitCounter--;
-        
       } 
       
     } else {
@@ -244,6 +249,19 @@ void move() {
   }
 }
 
+int spinCounter = 0;
+void dodge() {
+  if (dodging == true) {
+    if (spinCounter < 15) {
+      spinCounter++;
+      analogWrite(enablePin, 1000);
+    } else {
+      analogWrite(enablePin, 0);
+      spinCounter = 0;
+      dodging = false;
+    }
+  }
+}
 
 void changeMotorDir() {
   
@@ -266,11 +284,17 @@ void moveWall(){
     if (wallWouldbeDisplayed == false){
       wallWouldBeDisplayedCounter++;
         
-      if(wallWouldBeDisplayedCounter > holdWallDisplayCounter) {
-        logger("wall");  
-        wall.write(wallReachAngle);
+      if(wallWouldBeDisplayedCounter > holdWallDisplayCounter) { 
+        
+        if (random(1, 101) < 50) {
+          wall.write(wallReachAngle);
+        } else {
+          dodging = true;
+          changeMotorDir();
+
+        }
         wallWouldBeDisplayedCounter = 0;
-        holdWallDisplayCounter = random(1, 4);
+        holdWallDisplayCounter = random(1, 2);
       }
       wallWouldbeDisplayed = true;
       counter = 0;
@@ -278,19 +302,15 @@ void moveWall(){
   } else if (wallWouldbeDisplayed == true && counter > 50) {
     wall.write(wallStorageAngle); //will be called extra times
     wallWouldbeDisplayed = false;
-    logger("hiddingwall");
   }
 }
 
 bool distanceSensing(){
   distance = sonar.ping_cm();
   if (distance != 0 && distance < MAX_DISTANCE) {
-    return true;
-    // Serial.println("hand detecting");
-    
+    return true;   
   } else {
     return false;
-    
   }
 
 }
