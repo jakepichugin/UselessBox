@@ -2,6 +2,8 @@
 
 An Arduino-powered useless box — a machine whose entire purpose is to undo the very action you just took. Flip its switch, and it fights back with an arm, a movable wall, and wheels to evade you.
 
+Link to cad model: [onshape/uselessbox](https://cad.onshape.com/documents/e5b132b138b616b8db7b14f9/w/cec9b6e08dcd0e1d135ac499/e/483722fb8879c1b89f5c78c9?renderMode=0&uiState=6a38247583808aa5af703920)
+
 ![Useless Box](docs/box.jpg)
 ![Useless Box](docs/electronics.jpg)
 ![Useless Box](docs/full_view.jpg)
